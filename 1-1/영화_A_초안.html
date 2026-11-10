@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>영화 티어리스트</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.8rem;
+      margin-bottom: 24px;
+      color: #333;
+    }
+
+    /* ── 티어 영역 ── */
+    #tier-section { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+
+    .tier-row {
+      display: flex;
+      align-items: stretch;
+      border-radius: 8px;
+      overflow: hidden;
+      min-height: 64px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.1);
+    }
+
+    .tier-label {
+      width: 64px;
+      min-width: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .tier-label.S { background: #e74c3c; }
+    .tier-label.A { background: #e67e22; }
+    .tier-label.B { background: #2ecc71; }
+    .tier-label.C { background: #3498db; }
+
+    .tier-cards {
+      flex: 1;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      background: #fff;
+      border: 2px dashed #ddd;
+      min-height: 64px;
+      transition: background .2s;
+    }
+
+    .tier-cards.drag-over { background: #eef6ff; border-color: #3498db; }
+
+    /* ── 영화 카드 ── */
+    .movie-card {
+      background: #fff;
+      border: 1.5px solid #ccc;
+      border-radius: 6px;
+      padding: 6px 12px;
+      cursor: grab;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      user-select: none;
+      transition: box-shadow .15s;
+    }
+
+    .movie-card:hover { box-shadow: 0 3px 8px rgba(0,0,0,.15); }
+    .movie-card.dragging { opacity: .4; }
+
+    .movie-card .del-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #aaa;
+      font-size: 0.85rem;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .movie-card .del-btn:hover { color: #e74c3c; }
+
+    /* ── 미배치 영역 ── */
+    #unplaced-section {
+      background: #fff;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.1);
+      margin-bottom: 24px;
+    }
+
+    #unplaced-section h2 {
+      font-size: 1rem;
+      color: #555;
+      margin-bottom: 12px;
+    }
+
+    #unplaced-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 48px;
+      border: 2px dashed #ddd;
+      border-radius: 6px;
+      padding: 8px;
+      transition: background .2s;
+    }
+
+    #unplaced-cards.drag-over { background: #eef6ff; border-color: #3498db; }
+
+    /* ── 영화 추가 ── */
+    #add-section {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    #add-section input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1.5px solid #ccc;
+      border-radius: 6px;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    #add-section input:focus { border-color: #3498db; }
+
+    #add-section button {
+      padding: 10px 20px;
+      background: #3498db;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    #add-section button:hover { background: #2980b9; }
+
+    /* ── 하단 버튼 ── */
+    #bottom-btns {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    #bottom-btns button {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    #btn-save-img { background: #2ecc71; color: #fff; }
+    #btn-save-img:hover { background: #27ae60; }
+
+    #btn-reset { background: #eee; color: #555; }
+    #btn-reset:hover { background: #ddd; }
+
+    /* ── 모달 (티어 선택) ── */
+    #modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.4);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #modal-overlay.show { display: flex; }
+
+    #modal {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px 32px;
+      min-width: 260px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.2);
+      text-align: center;
+    }
+
+    #modal h3 { margin-bottom: 16px; font-size: 1.1rem; color: #333; }
+
+    #modal-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    #modal-btns button {
+      padding: 10px 22px;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      color: #fff;
+    }
+
+    .modal-tier-btn.S { background: #e74c3c; }
+    .modal-tier-btn.A { background: #e67e22; }
+    .modal-tier-btn.B { background: #2ecc71; }
+    .modal-tier-btn.C { background: #3498db; }
+
+    #modal-cancel {
+      margin-top: 14px;
+      background: none;
+      border: none;
+      color: #aaa;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+
+    #modal-cancel:hover { color: #555; }
+  </style>
+</head>
+<body>
+
+<h1>🎬 영화 티어리스트</h1>
+
+<!-- 티어 행 -->
+<div id="tier-section">
+  <div class="tier-row" data-tier="S">
+    <div class="tier-label S">S</div>
+    <div class="tier-cards" data-tier="S"></div>
+  </div>
+  <div class="tier-row" data-tier="A">
+    <div class="tier-label A">A</div>
+    <div class="tier-cards" data-tier="A"></div>
+  </div>
+  <div class="tier-row" data-tier="B">
+    <div class="tier-label B">B</div>
+    <div class="tier-cards" data-tier="B"></div>
+  </div>
+  <div class="tier-row" data-tier="C">
+    <div class="tier-label C">C</div>
+    <div class="tier-cards" data-tier="C"></div>
+  </div>
+</div>
+
+<!-- 미배치 영역 -->
+<div id="unplaced-section">
+  <h2>📋 미배치 영화</h2>
+  <div id="unplaced-cards"></div>
+</div>
+
+<!-- 영화 추가 -->
+<div id="add-section">
+  <input type="text" id="movie-input" placeholder="영화 제목을 입력하세요" maxlength="30"/>
+  <button onclick="addMovie()">+ 추가</button>
+</div>
+
+<!-- 하단 버튼 -->
+<div id="bottom-btns">
+  <button id="btn-save-img" onclick="saveImage()">🖼️ 이미지로 저장</button>
+  <button id="btn-reset" onclick="resetAll()">🔄 초기화</button>
+</div>
+
+<!-- 티어 선택 모달 -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h3 id="modal-title">티어를 선택하세요</h3>
+    <div id="modal-btns">
+      <button class="modal-tier-btn S" onclick="assignTier('S')">S</button>
+      <button class="modal-tier-btn A" onclick="assignTier('A')">A</button>
+      <button class="modal-tier-btn B" onclick="assignTier('B')">B</button>
+      <button class="modal-tier-btn C" onclick="assignTier('C')">C</button>
+    </div>
+    <button id="modal-cancel" onclick="closeModal()">취소</button>
+  </div>
+</div>
+
+<script>
+  // ── 초기 데이터 ──
+  const INITIAL_MOVIES = [
+    '기생충', '인터스텔라', '라라랜드',
+    '센과 치히로의 행방불명', '어벤져스: 엔드게임',
+    '범죄도시', '타이타닉', '토이 스토리'
+  ];
+
+  const STORAGE_KEY = 'movie-tierlist-v1';
+
+  // ── 상태 ──
+  // state = { movies: [{id, title, tier}] }
+  let state = { movies: [] };
+  let dragId = null;       // 드래그 중인 카드 id
+  let modalTargetId = null; // 모달에서 처리할 카드 id
+
+  // ── 초기화 ──
+  function init() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      state = JSON.parse(saved);
+    } else {
+      state.movies = INITIAL_MOVIES.map((title, i) => ({
+        id: 'movie-' + i,
+        title,
+        tier: null
+      }));
+    }
+    render();
+  }
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  // ── 렌더링 ──
+  function render() {
+    // 티어 영역 초기화
+    document.querySelectorAll('.tier-cards').forEach(el => el.innerHTML = '');
+    document.getElementById('unplaced-cards').innerHTML = '';
+
+    state.movies.forEach(movie => {
+      const card = createCard(movie);
+      if (movie.tier) {
+        document.querySelector(`.tier-cards[data-tier="${movie.tier}"]`).appendChild(card);
+      } else {
+        document.getElementById('unplaced-cards').appendChild(card);
+      }
+    });
+
+    setupDropZones();
+  }
+
+  function createCard(movie) {
+    const div = document.createElement('div');
+    div.className = 'movie-card';
+    div.draggable = true;
+    div.dataset.id = movie.id;
+
+    const title = document.createElement('span');
+    title.textContent = movie.title;
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'del-btn';
+    delBtn.textContent = '✕';
+    delBtn.title = '삭제';
+    delBtn.onclick = (e) => {
+      e.stopPropagation();
+      deleteMovie(movie.id);
+    };
+
+    div.appendChild(title);
+    div.appendChild(delBtn);
+
+    // 드래그 이벤트
+    div.addEventListener('dragstart', (e) => {
+      dragId = movie.id;
+      setTimeout(() => div.classList.add('dragging'), 0);
+    });
+    div.addEventListener('dragend', () => {
+      dragId = null;
+      div.classList.remove('dragging');
+    });
+
+    // 클릭 → 모달
+    div.addEventListener('click', () => openModal(movie.id, movie.title));
+
+    return div;
+  }
+
+  // ── 드롭존 설정 ──
+  function setupDropZones() {
+    const zones = [
+      ...document.querySelectorAll('.tier-cards'),
+      document.getElementById('unplaced-cards')
+    ];
+
+    zones.forEach(zone => {
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('drag-over');
+      });
+      zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        if (!dragId) return;
+
+        const tier = zone.dataset.tier || null;
+        const movie = state.movies.find(m => m.id === dragId);
+        if (movie) {
+          movie.tier = tier;
+          save();
+          render();
+        }
+      });
+    });
+  }
+
+  // ── 영화 추가 ──
+  function addMovie() {
+    const input = document.getElementById('movie-input');
+    const title = input.value.trim();
+    if (!title) { input.focus(); return; }
+
+    const id = 'movie-' + Date.now();
+    state.movies.push({ id, title, tier: null });
+    save();
+    render();
+    input.value = '';
+    input.focus();
+  }
+
+  // 엔터키로 추가
+  document.getElementById('movie-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addMovie();
+  });
+
+  // ── 영화 삭제 ──
+  function deleteMovie(id) {
+    if (!confirm('이 영화를 삭제할까요?')) return;
+    state.movies = state.movies.filter(m => m.id !== id);
+    save();
+    render();
+  }
+
+  // ── 모달 ──
+  function openModal(id, title) {
+    modalTargetId = id;
+    document.getElementById('modal-title').textContent = `"${title}" 티어를 선택하세요`;
+    document.getElementById('modal-overlay').classList.add('show');
+  }
+
+  function closeModal() {
+    modalTargetId = null;
+    document.getElementById('modal-overlay').classList.remove('show');
+  }
+
+  function assignTier(tier) {
+    if (!modalTargetId) return;
+    const movie = state.movies.find(m => m.id === modalTargetId);
+    if (movie) {
+      movie.tier = tier;
+      save();
+      render();
+    }
+    closeModal();
+  }
+
+  // 모달 바깥 클릭 시 닫기
+  document.getElementById('modal-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('modal-overlay')) closeModal();
+  });
+
+  // ── 초기화 ──
+  function resetAll() {
+    if (!confirm('모든 배치를 초기화할까요?')) return;
+    state.movies.forEach(m => m.tier = null);
+    save();
+    render();
+  }
+
+  // ── 이미지 저장 ──
+  function saveImage() {
+    const target = document.getElementById('tier-section');
+    html2canvas(target, {
+      backgroundColor: '#f5f5f5',
+      scale: 2
+    }).then(canvas => {
+      const link = document.createElement('a');
+      link.download = '영화_티어리스트.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+  }
+
+  // ── 시작 ──
+  init();
+</script>
+</body>
+</html>
